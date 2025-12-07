@@ -61,5 +61,3 @@ Muhammad Adeel
 ## License
 MIT License
 
-db name =air_quality_db
-passwrd = air.quality

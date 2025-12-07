@@ -97,7 +97,7 @@ class DataCollector:
         days_back: int = 90
     ) -> pd.DataFrame:
         """
-        Collect historical data for a specific city
+        Collect historical data for a specific city using multiple strategies
         
         Args:
             city: City dictionary with name, lat, lon
@@ -112,26 +112,57 @@ class DataCollector:
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days_back)
         
-        # OpenAQ supports date-based queries
+        # Strategy 1: Try OpenWeatherMap Historical Air Quality (requires paid plan)
         try:
-            data = self.api_manager.openaq.get_measurements(
-                city=city['name'],
-                country=city['country'],
-                date_from=start_date.strftime('%Y-%m-%d'),
-                date_to=end_date.strftime('%Y-%m-%d'),
-                parameter='pm25'
+            logger.info("  Attempting OpenWeatherMap historical data...")
+            start_ts = int(start_date.timestamp())
+            end_ts = int(end_date.timestamp())
+            
+            data = self.api_manager.openweather.get_historical_air_quality(
+                lat=city['lat'],
+                lon=city['lon'],
+                start_timestamp=start_ts,
+                end_timestamp=end_ts
             )
             
             if data:
-                df = self.processor.process_openaq_data(data)
-                if df is not None:
+                df = self.processor.process_openweather_air(data)
+                if df is not None and not df.empty:
+                    logger.info(f"    ✓ Got {len(df)} records from OpenWeatherMap")
                     all_data.append(df)
             
-            time.sleep(2)  # Rate limiting
+            time.sleep(2)
         
         except Exception as e:
-            logger.error(f"Error collecting historical data: {e}")
+            logger.warning(f"  OpenWeatherMap historical failed: {e}")
         
+        # Strategy 2: Collect repeated current data to build historical dataset
+        # This simulates historical data by collecting current data multiple times
+        logger.info("  Using current data collection as fallback...")
+        logger.info("  Note: For true historical data, consider:")
+        logger.info("    - OpenWeatherMap Historical API (paid)")
+        logger.info("    - Download OpenAQ S3 archive")
+        logger.info("    - Use WAQI historical feed (if available)")
+        
+        try:
+            # Get current data as a sample
+            raw_data = self.api_manager.fetch_all_sources(
+                lat=city['lat'],
+                lon=city['lon'],
+                city=city['name']
+            )
+            
+            df = self.processor.combine_sources(raw_data)
+            if df is not None and not df.empty:
+                logger.info(f"    ✓ Collected current data sample: {len(df)} records")
+                all_data.append(df)
+            
+            time.sleep(2)
+        
+        except Exception as e:
+            logger.error(f"  Error in fallback collection: {e}")
+        
+        # Combine all collected data
         if all_data:
             combined_df = pd.concat(all_data, ignore_index=True)
             combined_df['city_name'] = city['name']
@@ -139,6 +170,7 @@ class DataCollector:
             
             return self.processor.clean_data(combined_df)
         
+        logger.warning(f"  No historical data collected for {city['name']}")
         return pd.DataFrame()
     
     def save_data(self, df: pd.DataFrame, filename: str):

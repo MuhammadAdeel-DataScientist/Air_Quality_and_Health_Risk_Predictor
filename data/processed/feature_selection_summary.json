@@ -1,0 +1,14 @@
+{
+  "total_features_engineered": 253,
+  "features_analyzed": 253,
+  "features_recommended": {
+    "minimal": 20,
+    "balanced": 50,
+    "comprehensive": 33
+  },
+  "pca_recommendation": {
+    "original_features": 33,
+    "components_for_95pct": 3
+  },
+  "high_correlation_pairs": 377
+}
