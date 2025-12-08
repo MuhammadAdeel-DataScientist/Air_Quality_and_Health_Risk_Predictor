@@ -1,11 +1,12 @@
 """
 FastAPI Backend for Air Quality & Health Risk Predictor
 FIXED VERSION - Works around XGBoost version incompatibility
+WITH SHAP EXPLAINABILITY ENDPOINTS
 """
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import pandas as pd
 import numpy as np
@@ -13,6 +14,7 @@ from pathlib import Path
 import sys
 import traceback
 import pickle
+import json
 
 # Add parent directory to path
 sys.path.append(str(Path(__file__).parent.parent.parent))
@@ -39,12 +41,16 @@ app.add_middleware(
 MODEL_PATH = Path(__file__).parent.parent.parent / "data" / "models" / "best_model_gradientboosting.pkl"
 FEATURES_PATH = Path(__file__).parent.parent.parent / "data" / "processed" / "feature_sets.json"
 TEST_DATA_PATH = Path(__file__).parent.parent.parent / "data" / "processed" / "features_test.csv"
+EXPLAINABILITY_DIR = Path(__file__).parent.parent.parent / "data" / "explainability"
 
 model = None
 booster = None  # XGBoost Booster object
 feature_list = None
 test_data = None
 risk_calculator = None
+feature_importance_data = None
+sample_explanations = None
+explainability_metadata = None
 
 def prepare_features_safe(data_row, feature_list):
     """Safely prepare features, handling missing columns"""
@@ -106,6 +112,7 @@ def safe_predict(X, feature_names=None):
 async def load_resources():
     """Load model and resources on startup"""
     global model, booster, feature_list, test_data, risk_calculator
+    global feature_importance_data, sample_explanations, explainability_metadata
     
     try:
         # Load model
@@ -127,7 +134,6 @@ async def load_resources():
             print("✓ Fixed missing gpu_id attribute")
         
         # Load features - USE COMPREHENSIVE (33 features)
-        import json
         with open(FEATURES_PATH, 'r') as f:
             features = json.load(f)
             feature_list = features['comprehensive']
@@ -137,6 +143,38 @@ async def load_resources():
         
         # Initialize risk calculator
         risk_calculator = HealthRiskCalculator()
+        
+        # Load explainability data
+        try:
+            # Load feature importance
+            importance_json_path = EXPLAINABILITY_DIR / "feature_importance.json"
+            if importance_json_path.exists():
+                with open(importance_json_path, 'r') as f:
+                    feature_importance_data = json.load(f)
+                print("✓ Feature importance data loaded")
+            
+            # Load sample explanations
+            explanations_path = EXPLAINABILITY_DIR / "sample_explanations.json"
+            if explanations_path.exists():
+                with open(explanations_path, 'r') as f:
+                    sample_explanations = json.load(f)
+                print(f"✓ Sample explanations loaded ({len(sample_explanations)} samples)")
+            else:
+                sample_explanations = []
+                print("⚠️  No sample explanations found")
+            
+            # Load metadata
+            metadata_path = EXPLAINABILITY_DIR / "metadata.json"
+            if metadata_path.exists():
+                with open(metadata_path, 'r') as f:
+                    explainability_metadata = json.load(f)
+                print("✓ Explainability metadata loaded")
+        
+        except Exception as e:
+            print(f"⚠️  Could not load explainability data: {e}")
+            feature_importance_data = None
+            sample_explanations = []
+            explainability_metadata = None
         
         # Test prediction to verify model works
         test_X = np.zeros((1, len(feature_list)))
@@ -148,6 +186,7 @@ async def load_resources():
         print(f"✓ Test data: {len(test_data)} records")
         print("✓ Risk calculator initialized")
         print(f"✓ Test prediction successful: {test_pred[0]:.2f}")
+        print(f"✓ Explainability: {'Available' if feature_importance_data else 'Not available'}")
         print("=" * 70)
         
     except Exception as e:
@@ -195,6 +234,23 @@ class ForecastResponse(BaseModel):
     best_hour: int
     worst_hour: int
 
+class FeatureImportanceResponse(BaseModel):
+    """Response with feature importance data"""
+    features: List[str]
+    importance: List[float]
+    importance_pct: List[float]
+    metadata: Optional[Dict[str, Any]]
+
+class ExplanationResponse(BaseModel):
+    """Response with prediction explanation"""
+    prediction: float
+    aqi_category: str
+    base_value: float
+    top_features: List[Dict[str, Any]]
+    top_positive: List[Dict[str, Any]]
+    top_negative: List[Dict[str, Any]]
+    feature_count: int
+
 # ============================================================================
 # ENDPOINTS
 # ============================================================================
@@ -207,7 +263,8 @@ async def root():
         "version": "1.0.0",
         "status": "running",
         "model_loaded": model is not None,
-        "features": len(feature_list) if feature_list else 0
+        "features": len(feature_list) if feature_list else 0,
+        "explainability_available": feature_importance_data is not None
     }
 
 @app.get("/health", tags=["System"])
@@ -220,7 +277,9 @@ async def health_check():
         "features_count": len(feature_list) if feature_list else 0,
         "risk_calculator_ready": risk_calculator is not None,
         "test_data_loaded": test_data is not None,
-        "test_records": len(test_data) if test_data is not None else 0
+        "test_records": len(test_data) if test_data is not None else 0,
+        "explainability_loaded": feature_importance_data is not None,
+        "sample_explanations": len(sample_explanations) if sample_explanations else 0
     }
 
 @app.post("/api/predict", response_model=PredictionResponse, tags=["Prediction"])
@@ -471,12 +530,223 @@ async def get_statistics():
         raise HTTPException(status_code=500, detail=f"Stats error: {str(e)}")
 
 # ============================================================================
+# EXPLAINABILITY ENDPOINTS
+# ============================================================================
+
+@app.get("/api/explainability/feature-importance", response_model=FeatureImportanceResponse, tags=["Explainability"])
+async def get_feature_importance(
+    top_n: int = Query(default=20, ge=5, le=50, description="Number of top features to return")
+):
+    """Get global feature importance for the model"""
+    try:
+        if feature_importance_data is None:
+            raise HTTPException(
+                status_code=503, 
+                detail="Feature importance data not available. Run generate_shap_values.py first."
+            )
+        
+        # Limit to top_n features
+        features = feature_importance_data['features'][:top_n]
+        importance = feature_importance_data['importance'][:top_n]
+        importance_pct = feature_importance_data['importance_pct'][:top_n]
+        
+        return FeatureImportanceResponse(
+            features=features,
+            importance=importance,
+            importance_pct=importance_pct,
+            metadata=explainability_metadata
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Feature importance error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/explainability/explain/{city}", response_model=ExplanationResponse, tags=["Explainability"])
+async def explain_prediction(city: str):
+    """Get explanation for the current prediction for a specific city"""
+    try:
+        # Filter data for city
+        city_data = test_data[test_data['city_name'].str.lower() == city.lower()]
+        
+        if city_data.empty:
+            raise HTTPException(status_code=404, detail=f"City '{city}' not found")
+        
+        # Get latest record
+        latest = city_data.iloc[-1]
+        
+        # Prepare features
+        feature_values = prepare_features_safe(latest, feature_list)
+        
+        # Make prediction
+        X = np.array(feature_values).reshape(1, -1)
+        predictions = safe_predict(X)
+        aqi_pred = float(predictions[0])
+        
+        # Get risk assessment
+        assessment = risk_calculator.assess_health_risk(aqi_pred)
+        
+        # Get feature importance if available
+        if feature_importance_data:
+            # Create feature contributions based on feature importance
+            feature_impacts = []
+            for i, feature in enumerate(feature_list):
+                # Find importance for this feature
+                if feature in feature_importance_data['features']:
+                    idx = feature_importance_data['features'].index(feature)
+                    importance = feature_importance_data['importance'][idx]
+                else:
+                    importance = 0.0
+                
+                feature_impacts.append({
+                    'feature': feature,
+                    'value': float(feature_values[i]),
+                    'importance': float(importance)
+                })
+            
+            # Sort by importance
+            feature_impacts.sort(key=lambda x: abs(x['importance']), reverse=True)
+            
+            # Split into positive and negative (based on value deviation from mean)
+            top_features = feature_impacts[:10]
+            top_positive = [f for f in feature_impacts if f['value'] > 0][:5]
+            top_negative = [f for f in feature_impacts if f['value'] <= 0][:5]
+        else:
+            # Fallback: just show feature values
+            feature_impacts = [
+                {
+                    'feature': feature,
+                    'value': float(feature_values[i]),
+                    'importance': 0.0
+                }
+                for i, feature in enumerate(feature_list)
+            ]
+            top_features = feature_impacts[:10]
+            top_positive = []
+            top_negative = []
+        
+        return ExplanationResponse(
+            prediction=round(aqi_pred, 2),
+            aqi_category=assessment.aqi_category,
+            base_value=explainability_metadata.get('base_value', 0.0) if explainability_metadata else 0.0,
+            top_features=top_features,
+            top_positive=top_positive,
+            top_negative=top_negative,
+            feature_count=len(feature_list)
+        )
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Explanation error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/explainability/samples", tags=["Explainability"])
+async def get_sample_explanations(
+    limit: int = Query(default=10, ge=1, le=50, description="Number of sample explanations to return")
+):
+    """Get sample explanations from pre-computed SHAP values"""
+    try:
+        if not sample_explanations:
+            raise HTTPException(
+                status_code=503,
+                detail="Sample explanations not available. Run generate_shap_values.py with SHAP support."
+            )
+        
+        # Return limited samples
+        samples = sample_explanations[:limit]
+        
+        return {
+            "samples": samples,
+            "total_available": len(sample_explanations),
+            "returned": len(samples)
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Sample explanations error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/explainability/metadata", tags=["Explainability"])
+async def get_explainability_metadata():
+    """Get metadata about the explainability system"""
+    try:
+        if explainability_metadata is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Explainability metadata not available. Run generate_shap_values.py first."
+            )
+        
+        return {
+            "metadata": explainability_metadata,
+            "feature_importance_available": feature_importance_data is not None,
+            "sample_explanations_available": len(sample_explanations) > 0,
+            "sample_count": len(sample_explanations)
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Metadata error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+@app.get("/api/explainability/top-features", tags=["Explainability"])
+async def get_top_features(
+    n: int = Query(default=10, ge=1, le=33, description="Number of top features")
+):
+    """Get top N most important features with descriptions"""
+    try:
+        if feature_importance_data is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Feature importance data not available. Run generate_shap_values.py first."
+            )
+        
+        # Get top N features
+        top_features = []
+        for i in range(min(n, len(feature_importance_data['features']))):
+            feature_name = feature_importance_data['features'][i]
+            
+            # Create human-readable description
+            description = feature_name.replace('_', ' ').title()
+            if 'rolling' in feature_name:
+                description += " (time-averaged)"
+            elif 'lag' in feature_name:
+                description += " (historical)"
+            
+            top_features.append({
+                'name': feature_name,
+                'description': description,
+                'importance': feature_importance_data['importance'][i],
+                'importance_pct': feature_importance_data['importance_pct'][i],
+                'rank': i + 1
+            })
+        
+        return {
+            "top_features": top_features,
+            "total_features": len(feature_list)
+        }
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Top features error: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
+
+# ============================================================================
 # RUN SERVER
 # ============================================================================
 
 if __name__ == "__main__":
     import uvicorn
     print("\n" + "=" * 70)
-    print("Starting Air Quality Prediction API...")
+    print("Starting Air Quality Prediction API with Explainability...")
     print("=" * 70 + "\n")
     uvicorn.run(app, host="0.0.0.0", port=8000)

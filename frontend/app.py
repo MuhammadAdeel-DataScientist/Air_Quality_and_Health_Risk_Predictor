@@ -1,6 +1,6 @@
 """
 Air Quality & Health Risk Predictor - Interactive Dashboard
-Professional UI/UX with HCI Best Practices
+Professional UI/UX with HCI Best Practices + Explainability
 """
 import streamlit as st
 import requests
@@ -157,6 +157,14 @@ st.markdown("""
         box-shadow: 0 6px 12px rgba(102, 126, 234, 0.4);
     }
     
+    .feature-card {
+        background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        padding: 1rem;
+        border-radius: 0.75rem;
+        border-left: 4px solid #667eea;
+        margin-bottom: 0.5rem;
+    }
+    
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
     
@@ -236,7 +244,7 @@ def main():
         st.markdown("## 🎯 Navigation")
         page = st.radio(
             "",
-            ["🏠 Dashboard", "🌆 City Analysis", "📊 Forecast", "🏥 Health Assessment", "📈 Analytics"],
+            ["🏠 Dashboard", "🌆 City Analysis", "📊 Forecast", "🏥 Health Assessment", "🔍 Explainability", "📈 Analytics"],
             label_visibility="collapsed"
         )
         
@@ -246,6 +254,8 @@ def main():
         if health and health.get("status") == "healthy":
             st.success("✅ Connected")
             st.caption(f"📊 Records: {health.get('test_records', 0):,}")
+            if health.get('explainability_loaded'):
+                st.caption("🔍 Explainability: Active")
         else:
             st.error("❌ Disconnected")
     
@@ -257,6 +267,8 @@ def main():
         forecast_page()
     elif page == "🏥 Health Assessment":
         health_risk_page()
+    elif page == "🔍 Explainability":
+        explainability_page()
     elif page == "📈 Analytics":
         statistics_page()
 
@@ -596,6 +608,248 @@ def health_risk_page():
                         if warning:
                             with st.expander(f"{group.replace('_', ' ').title()}"):
                                 st.warning(warning)
+
+def explainability_page():
+    st.markdown('<h2 class="section-header">🔍 Model Explainability</h2>', unsafe_allow_html=True)
+    st.markdown("Understand how the AI model makes predictions")
+    
+    # Check if explainability is available
+    metadata = call_api("/api/explainability/metadata")
+    
+    if not metadata:
+        st.warning("⚠️ Explainability features are not available. Run `generate_shap_values.py` first.")
+        return
+    
+    tab1, tab2, tab3 = st.tabs(["📊 Feature Importance", "🏙️ City Explanation", "ℹ️ Model Info"])
+    
+    # Tab 1: Global Feature Importance
+    with tab1:
+        st.markdown("### 🎯 What Features Matter Most?")
+        st.markdown("These features have the greatest impact on air quality predictions:")
+        
+        col1, col2 = st.columns([1, 3])
+        
+        with col1:
+            top_n = st.slider("Show top features", 5, 20, 10)
+        
+        with col2:
+            st.markdown("<br>", unsafe_allow_html=True)
+            refresh_btn = st.button("🔄 Refresh", type="secondary", use_container_width=True)
+        
+        importance_data = call_api(f"/api/explainability/feature-importance?top_n={top_n}")
+        
+        if importance_data:
+            # Create horizontal bar chart
+            fig = go.Figure()
+            
+            fig.add_trace(go.Bar(
+                y=importance_data['features'][::-1],  # Reverse for better visualization
+                x=importance_data['importance_pct'][::-1],
+                orientation='h',
+                marker=dict(
+                    color=importance_data['importance'][::-1],
+                    colorscale='Viridis',
+                    showscale=True,
+                    colorbar=dict(title="Importance")
+                ),
+                text=[f"{x:.1f}%" for x in importance_data['importance_pct'][::-1]],
+                textposition='outside',
+                hovertemplate='<b>%{y}</b><br>Importance: %{x:.2f}%<extra></extra>'
+            ))
+            
+            fig.update_layout(
+                title=f"Top {top_n} Most Important Features",
+                xaxis_title="Importance (%)",
+                yaxis_title="Feature",
+                height=max(400, top_n * 35),
+                template="plotly_white",
+                showlegend=False
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # Feature details
+            st.markdown("---")
+            st.markdown("### 📋 Feature Details")
+            
+            top_features = call_api(f"/api/explainability/top-features?n={top_n}")
+            
+            if top_features:
+                for i, feature in enumerate(top_features['top_features'], 1):
+                    with st.expander(f"#{i} {feature['name'].replace('_', ' ').title()}", expanded=(i <= 3)):
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            st.metric("Importance", f"{feature['importance']:.4f}")
+                        
+                        with col2:
+                            st.metric("Contribution", f"{feature['importance_pct']:.2f}%")
+                        
+                        with col3:
+                            st.metric("Rank", f"#{feature['rank']}")
+                        
+                        st.markdown(f"**Description:** {feature['description']}")
+    
+    # Tab 2: City-Specific Explanation
+    with tab2:
+        st.markdown("### 🏙️ Explain Prediction for a City")
+        st.markdown("See which features contributed to a specific city's AQI prediction")
+        
+        cities_data = call_api("/api/cities")
+        if cities_data:
+            cities = cities_data.get('cities', [])
+            
+            col1, col2 = st.columns([2, 1])
+            
+            with col1:
+                selected_city = st.selectbox("🏙️ Select City", cities, key="explain_city")
+            
+            with col2:
+                st.markdown("<br>", unsafe_allow_html=True)
+                explain_btn = st.button("🔍 Explain", type="primary", use_container_width=True)
+            
+            if explain_btn:
+                with st.spinner(f"Analyzing {selected_city}..."):
+                    explanation = call_api(f"/api/explainability/explain/{selected_city.lower()}")
+                    
+                    if explanation:
+                        st.markdown("---")
+                        
+                        # Prediction summary
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            aqi_value = explanation['prediction']
+                            color = get_aqi_color(aqi_value)
+                            st.markdown(f"""
+                            <div class="aqi-display" style="background: {color}22; border: 2px solid {color}; padding: 2rem;">
+                                <h2 style="font-size: 3rem; color: {color};">{aqi_value:.0f}</h2>
+                                <p>Predicted AQI</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        with col2:
+                            badge_class = get_aqi_badge_class(explanation['aqi_category'])
+                            st.markdown(f"""
+                            <div class="info-card" style="text-align: center;">
+                                <h4>Category</h4>
+                                <span class="badge {badge_class}">{explanation['aqi_category']}</span>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        with col3:
+                            st.markdown(f"""
+                            <div class="info-card" style="text-align: center;">
+                                <h4>Features Used</h4>
+                                <p style="font-size: 2rem; font-weight: 700; color: #667eea;">{explanation['feature_count']}</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        
+                        # Top contributing features
+                        st.markdown("---")
+                        st.markdown("### 🔝 Top Contributing Features")
+                        
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            st.markdown("#### ⬆️ Increasing AQI")
+                            if explanation['top_positive']:
+                                for feature in explanation['top_positive'][:5]:
+                                    st.markdown(f"""
+                                    <div class="feature-card">
+                                        <strong>{feature['feature'].replace('_', ' ').title()}</strong><br>
+                                        Value: {feature['value']:.2f} • Importance: {feature.get('importance', 0):.4f}
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                            else:
+                                st.info("No positive contributors")
+                        
+                        with col2:
+                            st.markdown("#### ⬇️ Decreasing AQI")
+                            if explanation['top_negative']:
+                                for feature in explanation['top_negative'][:5]:
+                                    st.markdown(f"""
+                                    <div class="feature-card" style="border-left-color: #10b981;">
+                                        <strong>{feature['feature'].replace('_', ' ').title()}</strong><br>
+                                        Value: {feature['value']:.2f} • Importance: {feature.get('importance', 0):.4f}
+                                    </div>
+                                    """, unsafe_allow_html=True)
+                            else:
+                                st.info("No negative contributors")
+                        
+                        # All features table
+                        with st.expander("📋 All Features"):
+                            features_df = pd.DataFrame(explanation['top_features'])
+                            features_df = features_df.rename(columns={
+                                'feature': 'Feature',
+                                'value': 'Value',
+                                'importance': 'Importance'
+                            })
+                            st.dataframe(features_df, use_container_width=True, hide_index=True)
+    
+    # Tab 3: Model Information
+    with tab3:
+        st.markdown("### ℹ️ Model Information")
+        
+        if metadata and 'metadata' in metadata:
+            meta = metadata['metadata']
+            
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("""
+                <div class="info-card">
+                    <h4>📊 Model Type</h4>
+                    <p style="font-size: 1.2rem; font-weight: 600; color: #667eea;">{}</p>
+                </div>
+                """.format(meta.get('model_type', 'N/A')), unsafe_allow_html=True)
+                
+                st.markdown("""
+                <div class="info-card">
+                    <h4>🔢 Total Features</h4>
+                    <p style="font-size: 1.2rem; font-weight: 600; color: #667eea;">{}</p>
+                </div>
+                """.format(meta.get('n_features', 'N/A')), unsafe_allow_html=True)
+            
+            with col2:
+                st.markdown("""
+                <div class="info-card">
+                    <h4>📈 Test Samples</h4>
+                    <p style="font-size: 1.2rem; font-weight: 600; color: #667eea;">{:,}</p>
+                </div>
+                """.format(meta.get('test_samples', 0)), unsafe_allow_html=True)
+                
+                st.markdown("""
+                <div class="info-card">
+                    <h4>🔍 Explainer Type</h4>
+                    <p style="font-size: 1.2rem; font-weight: 600; color: #667eea;">{}</p>
+                </div>
+                """.format(meta.get('explainer_type', 'N/A')), unsafe_allow_html=True)
+            
+            st.markdown("---")
+            st.markdown("### 🏆 Top 10 Most Important Features")
+            
+            if 'top_features' in meta:
+                top_10 = meta['top_features'][:10]
+                for i, feature in enumerate(top_10, 1):
+                    st.markdown(f"""
+                    <div class="feature-card">
+                        <strong>#{i}</strong> {feature.replace('_', ' ').title()}
+                    </div>
+                    """, unsafe_allow_html=True)
+            
+            st.markdown("---")
+            st.markdown("### 📖 About Explainability")
+            st.info("""
+            **Model explainability** helps understand how the AI makes predictions:
+            
+            - **Feature Importance**: Shows which measurements have the most impact
+            - **SHAP Values**: Explains individual predictions in detail
+            - **Transparency**: Builds trust by showing the decision-making process
+            
+            This system uses gradient boosting feature importance to rank the contribution 
+            of each environmental factor to air quality predictions.
+            """)
 
 def statistics_page():
     st.markdown('<h2 class="section-header">📈 Analytics</h2>', unsafe_allow_html=True)
