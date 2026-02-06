@@ -10,6 +10,35 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import time
 
+import requests
+import time
+
+# Wake up backend on app start
+def wake_backend():
+    """Ping backend to wake it up from sleep"""
+    try:
+        with st.spinner("🔄 Connecting to backend..."):
+            for i in range(3):  # Try 3 times
+                try:
+                    response = requests.get(
+                        f"{API_BASE_URL}/health", 
+                        timeout=30
+                    )
+                    if response.status_code == 200:
+                        return True
+                except:
+                    time.sleep(5)  # Wait 5 seconds between tries
+        return False
+    except:
+        return False
+
+# Call on startup (before main app loads)
+if 'backend_awake' not in st.session_state:
+    st.session_state.backend_awake = wake_backend()
+    if not st.session_state.backend_awake:
+        st.error("⚠️ Backend is waking up. Please refresh in 30 seconds.")
+        st.stop()
+        
 # Page configuration
 st.set_page_config(
     page_title="AQI Predictor Pro",
