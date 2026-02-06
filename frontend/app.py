@@ -10,34 +10,61 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import time
 
-import requests
-import time
+# Page configuration (MUST BE FIRST)
+st.set_page_config(
+    page_title="AQI Predictor Pro",
+    page_icon="🌍",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# API Configuration
+API_BASE_URL = "https://aqi-predictor-backend.onrender.com"
 
 # Wake up backend on app start
 def wake_backend():
     """Ping backend to wake it up from sleep"""
     try:
-        with st.spinner("🔄 Connecting to backend..."):
-            for i in range(3):  # Try 3 times
-                try:
-                    response = requests.get(
-                        f"{https://aqi-predictor-backend.onrender.com}/health", 
-                        timeout=30
-                    )
-                    if response.status_code == 200:
-                        return True
-                except:
-                    time.sleep(5)  # Wait 5 seconds between tries
+        status_placeholder = st.empty()
+        
+        for i in range(6):  # Try 6 times (3 minutes total)
+            try:
+                status_placeholder.info(f"🔄 Waking up backend... Attempt {i+1}/6")
+                
+                response = requests.get(
+                    f"{API_BASE_URL}/health", 
+                    timeout=30
+                )
+                
+                if response.status_code == 200:
+                    status_placeholder.success("✅ Connected to backend!")
+                    time.sleep(1)
+                    status_placeholder.empty()
+                    return True
+                    
+            except Exception as e:
+                if i < 5:  # Don't sleep on last attempt
+                    time.sleep(30)  # Wait 30 seconds between tries
+                    
+        status_placeholder.empty()
         return False
-    except:
+        
+    except Exception as e:
+        st.error(f"Error: {str(e)}")
         return False
 
 # Call on startup (before main app loads)
 if 'backend_awake' not in st.session_state:
     st.session_state.backend_awake = wake_backend()
+    
     if not st.session_state.backend_awake:
-        st.error("⚠️ Backend is waking up. Please refresh in 30 seconds.")
+        st.error("⚠️ Backend is still waking up. Please wait 1 minute and click the button below:")
+        if st.button("🔄 Retry Connection"):
+            st.session_state.backend_awake = wake_backend()
+            if st.session_state.backend_awake:
+                st.rerun()
         st.stop()
+
 
 # Page configuration
 st.set_page_config(

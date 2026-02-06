@@ -1,8 +1,14 @@
 # 🌍 Air Quality & Health Risk Predictor
 
+[![Live Demo](https://img.shields.io/badge/Live-Demo-success?style=for-the-badge&logo=render)](https://aqi-predictor-frontend.onrender.com)
+[![API Docs](https://img.shields.io/badge/API-Documentation-blue?style=for-the-badge&logo=fastapi)](https://aqi-predictor-backend.onrender.com/docs)
+[![Python](https://img.shields.io/badge/Python-3.9+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge)](LICENSE)
+
 > **AI-powered platform delivering real-time air quality predictions with personalized health risk assessments to protect vulnerable populations.**
 
 [🚀 Live Demo](https://aqi-predictor-frontend.onrender.com) • [📚 API Documentation](https://aqi-predictor-backend.onrender.com/docs) • 
+
 ---
 
 ## 📖 Table of Contents
@@ -174,7 +180,7 @@ Air pollution is a **global health crisis**, causing 7 million premature deaths 
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/MuhammadAdeel-DataScientist/Air_Quality_and_Health_Risk_Predictor
+git clone https://github.com/MuhammadAdeel-DataScientist/Air_Quality_and_Health_Risk_Predictor.git
 
 # 2. Create virtual environment
 python -m venv venv
@@ -415,7 +421,6 @@ This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) 
 MIT License
 
 Copyright (c) 2025 [Muhammad Adeel]
-
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction...
@@ -426,10 +431,9 @@ in the Software without restriction...
 ## 👨‍💻 Author
 
 **[Muhammad Adeel]**
-
-- 💼 LinkedIn: (https://www.linkedin.com/in/adeel-data-scientist)
-- 🐱 GitHub: (https://github.com/MuhammadAdeel-DataScientist/)
-- 📧 Email: muhammadadeelmaan43@gmail.com
+💼 LinkedIn: (https://www.linkedin.com/in/adeel-data-scientist)
+🐱 GitHub: (https://github.com/MuhammadAdeel-DataScientist/)
+📧 Email: muhammadadeelmaan43@gmail.com
 
 ---
 
@@ -443,7 +447,20 @@ in the Software without restriction...
 
 ---
 
+## 📊 Project Stats
+
+![GitHub stars](https://img.shields.io/github/stars/https://github.com/MuhammadAdeel-DataScientist/Air-Quality-Predictor?style=social)
+![GitHub forks](https://img.shields.io/github/forks/https://github.com/MuhammadAdeel-DataScientist/Air-Quality-Predictor?style=social)
+![GitHub watchers](https://img.shields.io/github/watchers/https://github.com/MuhammadAdeel-DataScientist/Air-Quality-Predictor?style=social)
+
 **If you found this project helpful, please consider giving it a ⭐!**
 
 ---
 
+<div align="center">
+
+### **Made with ❤️ and Python**
+
+[⬆ Back to Top](#-air-quality--health-risk-predictor)
+
+</div>
