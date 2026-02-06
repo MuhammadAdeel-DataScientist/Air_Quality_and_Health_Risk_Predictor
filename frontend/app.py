@@ -21,7 +21,7 @@ def wake_backend():
             for i in range(3):  # Try 3 times
                 try:
                     response = requests.get(
-                        f"{API_BASE_URL}/health", 
+                        f"{https://aqi-predictor-backend.onrender.com}/health", 
                         timeout=30
                     )
                     if response.status_code == 200:
@@ -38,7 +38,7 @@ if 'backend_awake' not in st.session_state:
     if not st.session_state.backend_awake:
         st.error("⚠️ Backend is waking up. Please refresh in 30 seconds.")
         st.stop()
-        
+
 # Page configuration
 st.set_page_config(
     page_title="AQI Predictor Pro",
