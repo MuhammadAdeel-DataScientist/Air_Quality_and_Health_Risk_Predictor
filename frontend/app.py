@@ -125,13 +125,6 @@ st.markdown("""
 
 # Rest of your app code continues...
 
-# Page configuration
-st.set_page_config(
-    page_title="AQI Predictor Pro",
-    page_icon="🌍",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
 
 # API Configuration
 import os
