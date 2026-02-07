@@ -10,7 +10,7 @@ import plotly.express as px
 from datetime import datetime, timedelta
 import time
 
-# Page configuration (MUST BE FIRST)
+# Page configuration - MUST BE ABSOLUTELY FIRST!
 st.set_page_config(
     page_title="AQI Predictor Pro",
     page_icon="🌍",
@@ -21,7 +21,7 @@ st.set_page_config(
 # API Configuration
 API_BASE_URL = "https://aqi-predictor-backend.onrender.com"
 
-# Wake up backend on app start
+# Wake up backend function
 def wake_backend():
     """Ping backend to wake it up from sleep"""
     try:
@@ -29,7 +29,7 @@ def wake_backend():
         
         for i in range(6):  # Try 6 times (3 minutes total)
             try:
-                status_placeholder.info(f"🔄 Waking up backend... Attempt {i+1}/6")
+                status_placeholder.info(f"🔄 Waking up backend... Attempt {i+1}/6 (this may take up to 3 minutes)")
                 
                 response = requests.get(
                     f"{API_BASE_URL}/health", 
@@ -50,21 +50,80 @@ def wake_backend():
         return False
         
     except Exception as e:
-        st.error(f"Error: {str(e)}")
         return False
 
-# Call on startup (before main app loads)
-if 'backend_awake' not in st.session_state:
+# Initialize session state for backend connection
+if 'backend_checked' not in st.session_state:
+    st.session_state.backend_checked = False
+    st.session_state.backend_awake = False
+
+# Check backend on first load only
+if not st.session_state.backend_checked:
+    st.session_state.backend_checked = True
     st.session_state.backend_awake = wake_backend()
+
+# If backend not awake, show retry option
+if not st.session_state.backend_awake:
+    st.error("⚠️ Backend is still waking up. This is normal for free-tier services.")
+    st.info("💡 The backend needs 30-60 seconds to wake from sleep. Please click retry:")
     
-    if not st.session_state.backend_awake:
-        st.error("⚠️ Backend is still waking up. Please wait 1 minute and click the button below:")
-        if st.button("🔄 Retry Connection"):
+    col1, col2, col3 = st.columns([1, 1, 1])
+    with col2:
+        if st.button("🔄 Retry Connection", type="primary", use_container_width=True):
             st.session_state.backend_awake = wake_backend()
             if st.session_state.backend_awake:
                 st.rerun()
-        st.stop()
+            else:
+                st.error("Still waiting... Please try again in 30 seconds.")
+    
+    st.stop()
 
+# If we reach here, backend is awake - continue with your app
+
+# Professional Color Palette (WCAG AA Compliant)
+COLORS = {
+    'primary': '#1e3a8a',
+    'secondary': '#0ea5e9',
+    'success': '#10b981',
+    'warning': '#f59e0b',
+    'danger': '#ef4444',
+    'dark': '#1f2937',
+    'light': '#f9fafb',
+}
+
+# AQI Colors (Improved for visibility)
+AQI_COLORS = {
+    'good': '#22c55e',
+    'moderate': '#eab308',
+    'unhealthy_sensitive': '#f97316',
+    'unhealthy': '#ef4444',
+    'very_unhealthy': '#a855f7',
+    'hazardous': '#7f1d1d'
+}
+
+# Custom CSS
+st.markdown("""
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    
+    * { font-family: 'Inter', sans-serif; }
+    
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: 700;
+        text-align: center;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 1rem;
+        letter-spacing: -0.5px;
+    }
+    
+    /* Rest of your CSS here... */
+</style>
+""", unsafe_allow_html=True)
+
+# Rest of your app code continues...
 
 # Page configuration
 st.set_page_config(
