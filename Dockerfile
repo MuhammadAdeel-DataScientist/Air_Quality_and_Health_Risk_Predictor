@@ -28,15 +28,23 @@ COPY frontend/ ./frontend/
 RUN mkdir -p logs
 
 # Expose port
-EXPOSE 8000
+EXPOSE 8501
 
 # Health check
+# Update health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
+    CMD curl -f http://localhost:8501/_stcore/health || exit 1
 
 # Run as non-root user (security best practice)
 RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
-# Start application
-CMD ["uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# With these lines:
+RUN echo '#!/bin/bash\n\
+uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 &\n\
+sleep 5\n\
+streamlit run frontend/app.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true\n\
+' > /app/start.sh && chmod +x /app/start.sh
+
+# Start both services
+CMD ["/app/start.sh"]

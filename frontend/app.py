@@ -19,7 +19,7 @@ st.set_page_config(
 )
 
 # API Configuration
-API_BASE_URL = "https://aqi-predictor-backend.onrender.com"
+API_BASE_URL = "http://localhost:8000"
 
 # Wake up backend function
 def wake_backend():
