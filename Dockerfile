@@ -1,16 +1,15 @@
 FROM python:3.9-slim
 
-# Set working directory
 WORKDIR /app
 
-# Install system dependencies (minimal)
+# Install system dependencies
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy only requirements first (for layer caching)
+# Copy requirements
 COPY requirements.txt .
 
 # Install Python dependencies
@@ -20,31 +19,30 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY backend/ ./backend/
 COPY src/ ./src/
+COPY frontend/ ./frontend/
 COPY data/models/ ./data/models/
 COPY data/processed/ ./data/processed/
 COPY data/explainability/ ./data/explainability/
-COPY frontend/ ./frontend/
-# Create necessary directories
+
+# Create logs directory
 RUN mkdir -p logs
 
-# Expose port
+# Expose Streamlit port (NOT 8000!)
 EXPOSE 8501
 
-# Health check
-# Update health check
+# Health check for Streamlit
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD curl -f http://localhost:8501/_stcore/health || exit 1
 
-# Run as non-root user (security best practice)
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
-
-# With these lines:
+# Create startup script that runs BOTH services
 RUN echo '#!/bin/bash\n\
+echo "Starting backend API on port 8000..."\n\
 uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 &\n\
-sleep 5\n\
+echo "Waiting for backend to start..."\n\
+sleep 10\n\
+echo "Starting Streamlit frontend on port 8501..."\n\
 streamlit run frontend/app.py --server.port=8501 --server.address=0.0.0.0 --server.headless=true\n\
 ' > /app/start.sh && chmod +x /app/start.sh
 
 # Start both services
-CMD ["/app/start.sh"]
+CMD ["/bin/bash", "/app/start.sh"]

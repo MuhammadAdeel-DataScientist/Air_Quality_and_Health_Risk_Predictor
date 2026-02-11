@@ -7,7 +7,7 @@
 
 > **AI-powered platform delivering real-time air quality predictions with personalized health risk assessments to protect vulnerable populations.**
 
-[🚀 Live Demo](https://aqi-predictor-frontend.onrender.com) • [📚 API Documentation](https://aqi-predictor-backend.onrender.com/docs) • 
+[🚀 Live Demo](https://air-quality-and-health-risk-predictor.onrender.com) • [📚 API Documentation](https://air-quality-and-health-risk-predictor.onrender.com/docs) • 
 
 ---
 
@@ -212,7 +212,7 @@ docker run -p 8000:8000 aqi-predictor
 ## 💻 Usage
 
 ### **Web Interface**
-1. Open **[Live Demo](https://aqi-predictor-frontend.onrender.com)**
+1. Open **[Live Demo](https://air-quality-and-health-risk-predictor.onrender.com)**
 2. Select a city from the dropdown
 3. View real-time AQI and health recommendations
 4. Explore 24-hour forecast
@@ -225,14 +225,14 @@ import requests
 
 # Get current AQI for a city
 response = requests.get(
-    "https://aqi-predictor-backend.onrender.com/api/current/delhi"
+    "https://air-quality-and-health-risk-predictor.onrender.com/api/current/delhi"
 )
 data = response.json()
 print(f"AQI: {data['aqi']}, Category: {data['category']}")
 
 # Get health risk assessment
 response = requests.post(
-    "https://aqi-predictor-backend.onrender.com/api/health-risk",
+    "https://air-quality-and-health-risk-predictor.onrender.com/api/health-risk",
     json={
         "aqi": 150,
         "vulnerable_groups": ["children", "asthma_patients"]
@@ -243,7 +243,7 @@ print(assessment['recommendations'])
 
 # Get 24-hour forecast
 response = requests.get(
-    "https://aqi-predictor-backend.onrender.com/api/forecast/mumbai?hours=24"
+    "https://air-quality-and-health-risk-predictor.onrender.com/api/forecast/mumbai?hours=24"
 )
 forecast = response.json()
 print(f"Best hour: {forecast['best_hour']}, Worst: {forecast['worst_hour']}")
@@ -274,7 +274,7 @@ print(f"Best hour: {forecast['best_hour']}, Worst: {forecast['worst_hour']}")
 | `/api/explainability/top-features` | GET | Top N features |
 | `/api/explainability/metadata` | GET | Model metadata |
 
-**Full API Documentation:** [Swagger UI](https://aqi-predictor-backend.onrender.com/docs)
+**Full API Documentation:** [Swagger UI](https://air-quality-and-health-risk-predictor.onrender.com/docs)
 
 ---
 
@@ -351,8 +351,7 @@ pytest tests/test_integration.py -v
 
 ### **Current Deployment**
 - **Platform:** Render (Free Tier)
-- **Backend:** https://aqi-predictor-backend.onrender.com
-- **Frontend:** https://aqi-predictor-frontend.onrender.com
+- **App Link:** https://air-quality-and-health-risk-predictor.onrender.com
 - **Auto-Deploy:** Enabled on git push
 
 ### **Deploy Your Own**
@@ -367,7 +366,7 @@ pytest tests/test_integration.py -v
 ### **Environment Variables**
 ```env
 PYTHON_VERSION=3.9.0
-API_BASE_URL=https://aqi-predictor-backend.onrender.com
+https://air-quality-and-health-risk-predictor.onrender.com
 STREAMLIT_SERVER_HEADLESS=true
 ```
 

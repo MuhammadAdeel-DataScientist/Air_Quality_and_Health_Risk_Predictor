@@ -1,23 +1,14 @@
-# ============================================================================
-# FILE 5: render.yaml (Root Directory)
-# Render deployment configuration
-# ============================================================================
-
 services:
-  # Backend API Service
   - type: web
-    name: aqi-predictor-api
-    env: python
+    name: aqi-predictor-app
+    env: docker
     region: oregon
     plan: free
-    buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    dockerfilePath: ./Dockerfile
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.9.0
+      - key: PORT
+        value: 8501
       - key: ENVIRONMENT
         value: production
-      - key: LOG_LEVEL
-        value: info
-    healthCheckPath: /health
+    healthCheckPath: /_stcore/health
     autoDeploy: true
