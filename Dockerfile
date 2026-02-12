@@ -1,30 +1,26 @@
-FROM python:3.9-slim
+# Backend Dockerfile
+
+FROM python:3.10.13-slim
 
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies (needed for numpy, xgboost, shap)
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
-    curl \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# Copy backend requirements only
 COPY requirements.txt .
 
-# Install Python dependencies
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --upgrade pip
+RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy backend + src only
 COPY backend/ ./backend/
 COPY src/ ./src/
-COPY frontend/ ./frontend/
 COPY data/ ./data/
 
-# Create logs directory
-RUN mkdir -p logs
-
-# Start BOTH services properly for Render
-CMD uvicorn backend.app.main:app --host 0.0.0.0 --port 8000 & \
-    streamlit run frontend/app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true
+# Render provides $PORT — MUST use it
+CMD ["sh", "-c", "uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT"]
