@@ -1,21 +1,14 @@
-# ============================================================================
-# FILE 3: Dockerfile.frontend (Root Directory)
-# Streamlit frontend container
-# ============================================================================
+# Frontend Dockerfile
 
-FROM python:3.9-slim
+FROM python:3.10.13-slim
 
 WORKDIR /app
 
-# Install dependencies
 COPY requirements.txt .
+
+RUN pip install --no-cache-dir --upgrade pip
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy frontend code
 COPY frontend/ ./frontend/
 
-# Expose Streamlit port
-EXPOSE 8501
-
-# Start Streamlit
-CMD ["streamlit", "run", "frontend/app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["sh", "-c", "streamlit run frontend/app.py --server.port=$PORT --server.address=0.0.0.0 --server.headless=true"]
