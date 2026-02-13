@@ -19,7 +19,7 @@ st.set_page_config(
 )
 
 # API Configuration
-API_BASE_URL = "http://127.0.0.1:8000"
+API_BASE_URL = "https://aqi-backend-lhr1.onrender.com"
 
 
 # Professional Color Palette (WCAG AA Compliant)
